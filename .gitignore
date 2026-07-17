@@ -1,0 +1,27 @@
+# Personal data directories
+input/*
+Run_*/
+
+# Python cache
+__pycache__/
+
+# Output files
+*.xlsx
+*.xls
+*.csv
+
+# Debug directories
+debug/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+*.log
