@@ -8,6 +8,7 @@ Run from the repo root:
 import contextlib
 import copy
 import io
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -97,30 +98,47 @@ class ComputeScoreTests(unittest.TestCase):
         self.assertAlmostEqual(Schedule.compute_score(table_obj, data, page), -40)
 
 
+class FolderTests(ConfigTestCase):
+    def test_input_and_output_folders_live_inside_base_folder(self):
+        Schedule.CONFIG["base_folder"] = str(self.tmp)
+        self.assertEqual(Schedule.get_input_folder(), self.tmp / "input")
+        self.assertEqual(Schedule.get_output_folder(), self.tmp / "output")
+
+    def test_run_folder_is_inside_output_folder(self):
+        Schedule.CONFIG["base_folder"] = str(self.tmp)
+        run_folder = Schedule.get_run_folder()
+        self.assertEqual(run_folder.parent, self.tmp / "output")
+        self.assertTrue(run_folder.name.startswith("Run_"))
+
+
 class GetPdfFilesTests(ConfigTestCase):
-    def test_single_mode(self):
+    def setUp(self):
+        super().setUp()
+        Schedule.CONFIG["base_folder"] = str(self.tmp)
+        self.input_dir = self.tmp / "input"
+        self.input_dir.mkdir()
+
+    def test_single_mode_looks_in_input_folder(self):
         Schedule.CONFIG["input_mode"] = "single"
-        Schedule.CONFIG["input_pdf"] = str(self.tmp / "a.pdf")
-        self.assertEqual(Schedule.get_pdf_files(), [self.tmp / "a.pdf"])
+        Schedule.CONFIG["input_pdf"] = "a.pdf"
+        self.assertEqual(Schedule.get_pdf_files(), [self.input_dir / "a.pdf"])
 
     def test_folder_mode_returns_sorted_pdfs_only(self):
         for name in ["b.pdf", "a.pdf", "notes.txt"]:
-            (self.tmp / name).write_text("x")
+            (self.input_dir / name).write_text("x")
         Schedule.CONFIG["input_mode"] = "folder"
-        Schedule.CONFIG["input_folder"] = str(self.tmp)
         self.assertEqual(
-            Schedule.get_pdf_files(), [self.tmp / "a.pdf", self.tmp / "b.pdf"]
+            Schedule.get_pdf_files(), [self.input_dir / "a.pdf", self.input_dir / "b.pdf"]
         )
 
     def test_folder_mode_ignores_pdf_extension_case(self):
-        (self.tmp / "A.PDF").write_text("x")
+        (self.input_dir / "A.PDF").write_text("x")
         Schedule.CONFIG["input_mode"] = "folder"
-        Schedule.CONFIG["input_folder"] = str(self.tmp)
-        self.assertEqual(Schedule.get_pdf_files(), [self.tmp / "A.PDF"])
+        self.assertEqual(Schedule.get_pdf_files(), [self.input_dir / "A.PDF"])
 
     def test_missing_folder_returns_empty(self):
         Schedule.CONFIG["input_mode"] = "folder"
-        Schedule.CONFIG["input_folder"] = str(self.tmp / "nope")
+        Schedule.CONFIG["base_folder"] = str(self.tmp / "nope")
         self.assertEqual(Schedule.get_pdf_files(), [])
 
     def test_invalid_mode_raises(self):
@@ -156,20 +174,33 @@ class ExportExcelTests(ConfigTestCase):
 class MainTests(ConfigTestCase):
     def test_no_pdf_creates_no_run_folder(self):
         Schedule.CONFIG["input_mode"] = "folder"
-        Schedule.CONFIG["input_folder"] = str(self.tmp / "empty")
-        Schedule.CONFIG["run_root"] = str(self.tmp / "runs")
+        Schedule.CONFIG["base_folder"] = str(self.tmp)
+        (self.tmp / "input").mkdir()
         Schedule.main()
-        self.assertFalse((self.tmp / "runs").exists())
+        self.assertFalse((self.tmp / "output").exists())
 
     def test_errors_are_printed_even_when_debug_is_off(self):
         Schedule.CONFIG["debug"] = False
         Schedule.CONFIG["input_mode"] = "single"
-        Schedule.CONFIG["input_pdf"] = str(self.tmp / "missing.pdf")
-        Schedule.CONFIG["run_root"] = str(self.tmp / "runs")
+        Schedule.CONFIG["input_pdf"] = "missing.pdf"
+        Schedule.CONFIG["base_folder"] = str(self.tmp)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             Schedule.main()
         self.assertIn("Failed to process PDF", output.getvalue())
+
+    @unittest.skipUnless(SAMPLE_PDF.exists(), "sample PDF not in input/ (kept out of git)")
+    def test_full_run_writes_excel_and_debug_inside_output_folder(self):
+        input_dir = self.tmp / "input"
+        input_dir.mkdir()
+        shutil.copy(SAMPLE_PDF, input_dir / SAMPLE_PDF.name)
+        Schedule.CONFIG["debug"] = False
+        Schedule.CONFIG["base_folder"] = str(self.tmp)
+        Schedule.main()
+        run_folders = list((self.tmp / "output").glob("Run_*"))
+        self.assertEqual(len(run_folders), 1)
+        self.assertTrue((run_folders[0] / "output.xlsx").exists())
+        self.assertEqual(len(list((run_folders[0] / "debug").glob("*.png"))), 9)
 
 
 @unittest.skipUnless(SAMPLE_PDF.exists(), "sample PDF not in input/ (kept out of git)")

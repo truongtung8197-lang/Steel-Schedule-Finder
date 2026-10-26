@@ -32,17 +32,26 @@ from PIL import ImageDraw
 
 CONFIG = {
     # ------------------------------------------------------------------
+    # Folders
+    #
+    # Set only the mother folder. Everything else lives inside it:
+    #
+    #   <base_folder>/input/                         PDFs to read
+    #   <base_folder>/output/Run_YYYYMMDD_HHMMSS/    one folder per run
+    #       output.xlsx                              Excel result
+    #       debug/                                   debug PNG images
+    # ------------------------------------------------------------------
+    "base_folder": r"D:\Working\GITHUB REPO\Steel-Schedule-Finder",
+    "input_dir": "input",
+    "output_dir": "output",
+    # ------------------------------------------------------------------
     # Input
     # ------------------------------------------------------------------
     "input_mode": "folder",  # "single" or "folder"
-    "input_pdf": r"D:\Working\Draft\input\SUB1-[0].pdf",
-    "input_folder": r"D:\Working\Draft\input",
+    # Used when input_mode is "single": file name inside the input folder.
+    "input_pdf": "TRUSS LOT 73.pdf",
     # File name only: the file is saved inside each Run_* folder.
     "output_excel": "output.xlsx",
-    # ------------------------------------------------------------------
-    # Run history
-    # ------------------------------------------------------------------
-    "run_root": r"D:\Working\Draft",
     # ------------------------------------------------------------------
     # Debug
     # (debug images are saved in <run folder>/debug)
@@ -224,15 +233,25 @@ class PdfResult:
 # ==============================================================================
 
 
+def get_input_folder():
+
+    return Path(CONFIG["base_folder"]) / CONFIG["input_dir"]
+
+
+def get_output_folder():
+
+    return Path(CONFIG["base_folder"]) / CONFIG["output_dir"]
+
+
 def get_pdf_files():
 
     mode = CONFIG["input_mode"]
 
     if mode == "single":
-        return [Path(CONFIG["input_pdf"])]
+        return [get_input_folder() / CONFIG["input_pdf"]]
 
     if mode == "folder":
-        folder = Path(CONFIG["input_folder"])
+        folder = get_input_folder()
 
         if not folder.exists() or not folder.is_dir():
             return []
@@ -267,9 +286,7 @@ def get_run_folder():
 
     now = datetime.now()
 
-    root = Path(CONFIG.get("run_root", Path.cwd()))
-
-    return root / f"Run_{now:%Y%m%d_%H%M%S}"
+    return get_output_folder() / f"Run_{now:%Y%m%d_%H%M%S}"
 
 
 # ==============================================================================

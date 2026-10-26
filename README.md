@@ -1,257 +1,198 @@
 # PDF Steel Schedule Extractor
 
-Công cụ trích xuất bảng thép (steel schedule) từ file PDF và xuất ra Excel.
+Extracts steel schedule (material list) tables from PDF drawings and exports them to Excel.
 
-## Tính năng
+## Features
 
-- Quét vùng góc dưới-bên trái của bản vẽ PDF
-- Xuất tất cả bảng được phát hiện trong vùng quét ra file Excel
-- Chế độ debug vẽ các khung bảng được phát hiện lên file PNG
-- Dễ dàng cấu hình thông qua biến CONFIG
-- Hỗ trợ:
-  - Xử lý một file PDF đơn lẻ
-  - Xử lý toàn bộ thư mục chứa PDF
+- Scans only the bottom-left area of each drawing page
+- Exports ALL tables detected in that area to one Excel file
+- Debug mode draws the search area and detected tables onto PNG images
+- Easy to tune through the `CONFIG` block at the top of `Schedule.py`
+- Works on a single PDF or on a whole folder of PDFs
 
-## Yêu cầu hệ thống
+## Requirements
 
-- Python 3.11+ (pandas 3.x yêu cầu)
-- Các thư viện Python (xem `requirements.txt`):
+- Python 3.11+ (required by pandas 3.x)
+- Python libraries (see `requirements.txt`):
   - pdfplumber
   - pandas
-  - openpyxl (ghi file Excel)
+  - openpyxl (writes the Excel file)
   - PyMuPDF
-  - Pillow (PIL)
+  - Pillow
 
-## Cài đặt
+## Install
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Cấu trúc thư mục
+## Folder structure
+
+You set one mother folder (`base_folder` in `CONFIG`). Everything else lives inside it.
 
 ```text
-Steel-Schedule-Finder/
-├── Schedule.py          # File chính của chương trình
-├── requirements.txt     # Danh sách thư viện
-├── README.md            # Hướng dẫn sử dụng
-├── context/             # Tài liệu kế hoạch / ghi chú (plan.md)
-├── tests/               # Test tự động (unittest)
-├── input/               # Thư mục chứa file PDF đầu vào (không đẩy lên git)
-└── Run_YYYYMMDD_HHMMSS/ # Kết quả mỗi lần chạy, nằm trong "run_root" (không đẩy lên git)
-    ├── output.xlsx      # File Excel kết quả
-    └── debug/           # Các file debug PNG
+Steel-Schedule-Finder/            <- base_folder
+├── Schedule.py                   # The program
+├── requirements.txt              # Python libraries
+├── README.md                     # This file
+├── context/                      # Plans and notes (plan.md)
+├── tests/                        # Automatic tests (unittest)
+├── input/                        # Put your PDFs here (not pushed to git)
+└── output/                       # Results (not pushed to git)
+    └── Run_YYYYMMDD_HHMMSS/      # One folder per run, never overwritten
+        ├── output.xlsx           # Excel result
+        └── debug/                # Debug PNG images
 ```
 
-## Cách sử dụng
+## How to use
 
-### 1. Cấu hình
+1. Put your PDF files in the `input/` folder.
+2. Open `Schedule.py` and check the `CONFIG` block (see below). Most of the time you only need `base_folder` and `input_mode`.
+3. Run:
 
-Mở file `Schedule.py` và điều chỉnh các tham số trong biến `CONFIG`:
+   ```bash
+   python Schedule.py
+   ```
+
+4. Open the newest folder in `output/`. The Excel file is `output.xlsx`; the debug images are in `debug/`.
+
+### Folder settings
 
 ```python
 CONFIG = {
-    # Chế độ input: "single" hoặc "folder"
+    # Mother folder. input/ and output/ are created inside it.
+    "base_folder": r"D:\Working\GITHUB REPO\Steel-Schedule-Finder",
+    "input_dir": "input",
+    "output_dir": "output",
+
+    # "folder" = every PDF in input/, "single" = only the file named in input_pdf
     "input_mode": "folder",
-    
-    # Đường dẫn file PDF đơn lẻ (khi input_mode = "single")
-    "input_pdf": r"D:\Working\Draft\input\SUB1-[0].pdf",
-    
-    # Đường dẫn thư mục chứa PDF (khi input_mode = "folder")
-    "input_folder": r"D:\Working\Draft\input",
-    
-    # Tên file Excel đầu ra (lưu trong thư mục Run_* của mỗi lần chạy)
+    # Used only in "single" mode: a file name inside input/
+    "input_pdf": "TRUSS LOT 73.pdf",
+
+    # File name of the Excel result (saved inside each Run_* folder)
     "output_excel": "output.xlsx",
-    
-    # Thư mục gốc lưu các lần chạy
-    "run_root": r"D:\Working\Draft",
-    
-    # Chế độ debug (ảnh debug lưu trong Run_*/debug/)
-    "debug": True,
-    "export_debug_images": True,
-    
-    # Vùng quét trên trang PDF (tỷ lệ 0.00-1.00)
-    "search_region": {
-        "left": 0.00,      # Từ trái: 0%
-        "right": 0.40,     # Đến phải: 40% chiều rộng
-        "top": 0.60,       # Từ trên: 60% chiều cao
-        "bottom": 1.00,    # Đến dưới: 100% chiều cao
-    },
-    
-    # Cài đặt trích xuất bảng
-    "table_settings": {
-        "vertical_strategy": "lines",
-        "horizontal_strategy": "lines",
-        "snap_tolerance": 5,
-        "join_tolerance": 5,
-        "intersection_tolerance": 8,
-        "edge_min_length": 10,
-    },
-    
-    # Bộ lọc cơ bản
-    "min_rows": 3,      # Số dòng tối thiểu
-    "min_cols": 2,      # Số cột tối thiểu
-    "min_cells": 8,     # Số ô tối thiểu
-    
-    # Tên sheet trong Excel
-    "sheet_name": "Steel Schedule",
-    
-    # Cài đặt chấm điểm bảng
-    "scoring": {
-        "left_weight": 40,        # Ưu tiên bảng sát góc trái
-        "bottom_weight": 40,      # Ưu tiên bảng sát đáy
-        "aspect_weight": 30,      # Ưu tiên bảng rộng
-        "cell_weight": 20,        # Ưu tiên nhiều ô
-        "text_weight": 20,        # Ưu tiên nhiều text
-        "height_penalty": 50,     # Phạt bảng quá cao
-        "min_score": 80,          # Điểm tối thiểu để giữ bảng
-        "height_threshold": 0.20, # Ngưỡng phạt chiều cao (tỷ lệ chiều cao trang)
-        "vertical_threshold": 1.2, # Ngưỡng phạt bảng dọc (tỷ lệ rộng/cao)
-        "vertical_penalty": 100,  # Điểm phạt bảng dọc
-    },
+
+    # Debug
+    "debug": True,                # Print progress messages to the console
+    "export_debug_images": True,  # Save PNG images to <run folder>/debug/
+    ...
 }
 ```
 
-### 2. Điều chỉnh vùng quét (search_region)
+To move the project to another computer or folder, change `base_folder` only.
 
-Vùng quét được xác định bằng tỷ lệ (0.00-1.00) so với chiều rộng/chiều cao trang:
+### Search region
+
+The region is given as ratios (0.00 to 1.00) of the page width and height:
 
 ```python
 "search_region": {
-    "left": 0.00,    # 0% từ trái
-    "right": 0.40,   # 40% chiều rộng
-    "top": 0.60,     # 60% từ trên
-    "bottom": 1.00,  # 100% chiều cao (đáy trang)
+    "left": 0.00,    # start at the left edge
+    "right": 0.40,   # up to 40% of the page width
+    "top": 0.60,     # start at 60% of the page height
+    "bottom": 1.00,  # down to the bottom of the page
 }
 ```
 
-**Ví dụ:**
+This means: the left 40% of the page width, and the lower 40% of the page height.
 
-- `left: 0.00, right: 0.40` → Quét 40% chiều rộng từ trái sang
-- `top: 0.60, bottom: 1.00` → Quét 40% chiều cao từ giữa xuống đáy
-
-### 3. Chạy chương trình
-
-```bash
-python Schedule.py
-```
-
-### 4. Xem kết quả
-
-- **File Excel**: Lưu trong thư mục `Run_YYYYMMDD_HHMMSS/output.xlsx`
-- **File debug**: Lưu trong thư mục `Run_YYYYMMDD_HHMMSS/debug/` (nếu `export_debug_images = True`)
-
-## Chế độ Debug
-
-Khi bật chế độ debug (`debug: True`), chương trình sẽ:
-
-1. In ra console các thông tin chi tiết về quá trình xử lý
-2. Tạo các file PNG trong thư mục `debug/` với:
-   - **Vùng đỏ**: Vùng quét được định nghĩa trong `search_region`
-   - **Vùng xanh**: Các bảng được phát hiện
-   - **Chữ T1, T2, ...**: Số thứ tự bảng
-
-## Tùy chỉnh
-
-### Điều chỉnh độ nhạy phát hiện bảng
-
-Nếu bảng bị bỏ sót hoặc phát hiện sai, điều chỉnh các tham số trong `table_settings`:
+### Other settings
 
 ```python
-"table_settings": {
-    "snap_tolerance": 5,           # Tăng nếu các đường kẻ không nối lại
-    "join_tolerance": 5,           # Tăng nếu các đoạn đường kẻ bị tách
-    "intersection_tolerance": 8,   # Tăng nếu giao điểm không được phát hiện
-    "edge_min_length": 10,         # Tăng nếu phát hiện nhiều đường kẻ nhỏ không cần thiết
-}
+"table_settings": {            # passed to pdfplumber's find_tables()
+    "snap_tolerance": 5,
+    "join_tolerance": 5,
+    "intersection_tolerance": 8,
+    "edge_min_length": 10,
+},
+"min_rows": 3,                 # minimum non-empty rows in a table
+"min_cols": 2,                 # minimum columns
+"min_cells": 8,                # minimum rows x columns
+"sheet_name": "Steel Schedule",
+"scoring": {                   # how tables are ranked (see Tuning)
+    "left_weight": 40,
+    "bottom_weight": 40,
+    "aspect_weight": 30,
+    "cell_weight": 20,
+    "text_weight": 20,
+    "height_penalty": 50,
+    "min_score": 80,
+    "height_threshold": 0.20,
+    "vertical_threshold": 1.2,
+    "vertical_penalty": 100,
+},
 ```
 
-### Lọc bảng không mong muốn
+## Debug mode
 
-Nếu xuất hiện nhiều bảng nhỏ không cần thiết, tăng các ngưỡng lọc:
+With `export_debug_images` on, each page gets a PNG in `<run folder>/debug/`:
 
-```python
-"min_rows": 3,      # Tăng lên 4-5
-"min_cols": 2,      # Tăng lên 3-4
-"min_cells": 8,     # Tăng lên 10-15
-```
+- **Red box**: the search area (`search_region`)
+- **Blue boxes**: the tables that were found
+- **T1, T2, ...**: the table numbers
 
-Hoặc tăng điểm tối thiểu:
+With `debug` on, the program also prints progress to the console. Errors are always printed, even when `debug` is off.
 
-```python
-"min_score": 80,    # Tăng lên 100-120
-```
+Use the debug images whenever you change the settings, to check what was picked up.
 
-### Điều chỉnh trọng số chấm điểm
+## Tuning
 
-Nếu bảng steel schedule không được ưu tiên đúng, điều chỉnh các trọng số trong `scoring`:
+### Tables are missed or detected wrongly
 
-```python
-"scoring": {
-    "left_weight": 40,        # Tăng nếu bảng nằm sát góc trái
-    "bottom_weight": 40,      # Tăng nếu bảng nằm sát đáy
-    "aspect_weight": 30,      # Tăng nếu bảng rộng hơn là cao
-    "cell_weight": 20,        # Tăng nếu bảng có nhiều ô
-    "text_weight": 20,        # Tăng nếu bảng có nhiều text
-}
-```
+Adjust `table_settings`:
 
-## Xử lý sự cố
+- `snap_tolerance`: raise it if table lines do not join up
+- `join_tolerance`: raise it if table lines are split into pieces
+- `intersection_tolerance`: raise it if line crossings are not detected
+- `edge_min_length`: raise it if many tiny lines are picked up
 
-### Không tìm thấy bảng nào
+### Too many small or junk tables
 
-1. Kiểm tra lại vùng quét `search_region` có đúng không
-2. Xem file debug PNG để xem vùng quét và các bảng được phát hiện
-3. Tăng `min_score` hoặc điều chỉnh `table_settings`
+- Raise `min_rows`, `min_cols` or `min_cells` (for example 4-5 rows, 3-4 columns, 10-15 cells)
+- Or raise `scoring.min_score` (for example 100-120)
+- Or raise `table_settings.edge_min_length`
 
-### Phát hiện nhiều bảng nhỏ không cần thiết
+### The steel schedule is not ranked correctly
 
-1. Tăng `min_rows`, `min_cols`, `min_cells`
-2. Tăng `min_score`
-3. Tăng `edge_min_length` trong `table_settings`
+Adjust the weights in `scoring`:
 
-### Bảng bị cắt xén hoặc thiếu dữ liệu
+- `left_weight`: raise it to favour tables close to the left edge
+- `bottom_weight`: raise it to favour tables close to the bottom
+- `aspect_weight`: raise it to favour wide tables
+- `cell_weight`: raise it to favour tables with many cells
+- `text_weight`: raise it to favour tables with a lot of text
 
-1. Mở rộng vùng quét `search_region`
-2. Giảm `min_rows`, `min_cols`, `min_cells`
-3. Giảm `min_score`
+## Troubleshooting
 
-## Chạy test
+### "No PDF found."
+
+Check that your PDFs are in `<base_folder>/input/` and that `base_folder` is correct. In `"single"` mode, check that `input_pdf` matches the file name.
+
+### "No table found."
+
+1. Look at the debug images to see the search area and what was detected
+2. Widen `search_region`
+3. Lower `min_rows`, `min_cols`, `min_cells` or `scoring.min_score`
+4. Adjust `table_settings`
+
+### Tables are cut off or data is missing
+
+1. Widen `search_region`
+2. Lower `min_rows`, `min_cols`, `min_cells`
+3. Lower `scoring.min_score`
+
+## Running the tests
 
 ```bash
 python -m unittest discover -s tests -t .
 ```
 
-Test "smoke" dùng file `input/TRUSS LOT 73.pdf`. File này không nằm trong git; nếu không có, test đó sẽ được bỏ qua.
+The smoke tests use `input/TRUSS LOT 73.pdf`. That file is not in git; if it is missing, those tests are skipped.
 
-## Lưu ý
+## Notes and known limits
 
-- Các thư mục `input/` và `Run_*/`, cùng mọi file `*.pdf`, không được đẩy lên git (đã cấu hình trong `.gitignore`)
-- Trang PDF bị xoay (rotated) có thể làm khung debug bị lệch vị trí; kết quả Excel không bị ảnh hưởng nhiều nhưng nên kiểm tra lại bằng ảnh debug
-- Mỗi lần chạy chương trình sẽ tạo một thư mục `Run_YYYYMMDD_HHMMSS` mới
-- File Excel kết quả được lưu trong thư mục run tương ứng
-- Nên bật chế độ debug khi điều chỉnh cấu hình để dễ dàng kiểm tra
-
-## Ví dụ cấu hình
-
-### Xử lý một file PDF đơn lẻ
-
-```python
-CONFIG = {
-    "input_mode": "single",
-    "input_pdf": r"D:\Working\Draft\input\drawing.pdf",
-    "output_excel": "output.xlsx",
-    # ... các cài đặt khác
-}
-```
-
-### Xử lý toàn bộ thư mục PDF
-
-```python
-CONFIG = {
-    "input_mode": "folder",
-    "input_folder": r"D:\Working\Draft\input",
-    "output_excel": "output.xlsx",
-    # ... các cài đặt khác
-}
-```
+- `input/`, `output/`, `Run_*/` and all `*.pdf` files are not pushed to git (see `.gitignore`).
+- Every run creates a new `Run_YYYYMMDD_HHMMSS` folder, so old results are kept.
+- If a material list has two blocks side by side, each Excel row holds two items (columns `Col_1`-`Col_7` and `Col_8`-`Col_14`). Splitting them is not done yet.
+- Rotated PDF pages can make the debug boxes appear in the wrong place. Check the Excel data against the drawing.
