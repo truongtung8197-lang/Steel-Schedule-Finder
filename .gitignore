@@ -17,8 +17,10 @@ debug/
 *.xls
 *.csv
 
-# Python cache
+# Python cache and virtual environment
 __pycache__/
+.venv/
+venv/
 
 # IDE files
 .vscode/

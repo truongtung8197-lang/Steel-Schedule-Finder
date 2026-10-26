@@ -22,9 +22,38 @@ Extracts steel schedule (material list) tables from PDF drawings and exports the
 
 ## Install
 
+Run these commands in the project folder. You only need to do this once per computer.
+
+### Option A: virtual environment (recommended)
+
+A virtual environment is a private copy of Python for this project. The pinned library versions in `requirements.txt` cannot clash with other tools on your computer, and everyone on the team gets the same versions.
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+On macOS or Linux, activate with `source .venv/bin/activate` instead.
+
+After that, activate the environment each time you open a new terminal, then run the program:
+
+```powershell
+.venv\Scripts\activate
+python Schedule.py
+```
+
+In VS Code, press `Ctrl+Shift+P`, choose **Python: Select Interpreter**, and pick the one inside `.venv`. The Run button will then use it automatically.
+
+### Option B: install directly
+
+This installs the libraries into your main Python. It is quicker, but it can clash with other Python projects on the same computer.
+
 ```bash
 pip install -r requirements.txt
 ```
+
+Then run `python Schedule.py`.
 
 ## Folder structure
 
