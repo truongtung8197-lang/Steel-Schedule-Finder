@@ -14,30 +14,33 @@ Công cụ trích xuất bảng thép (steel schedule) từ file PDF và xuất 
 
 ## Yêu cầu hệ thống
 
-- Python 3.7+
-- Các thư viện Python:
+- Python 3.11+ (pandas 3.x yêu cầu)
+- Các thư viện Python (xem `requirements.txt`):
   - pdfplumber
   - pandas
-  - PyMuPDF (fitz)
+  - openpyxl (ghi file Excel)
+  - PyMuPDF
   - Pillow (PIL)
 
 ## Cài đặt
 
 ```bash
-pip install pdfplumber pandas PyMuPDF Pillow
+pip install -r requirements.txt
 ```
 
 ## Cấu trúc thư mục
 
-```
-PFGtoExcel/
+```text
+Steel-Schedule-Finder/
 ├── Schedule.py          # File chính của chương trình
-├── .gitignore          # Các file/thư mục không đẩy lên git
-├── input/              # Thư mục chứa file PDF đầu vào (không đẩy lên git)
-├── Run_YYYYMMDD_HHMMSS/  # Thư mục chứa kết quả mỗi lần chạy (không đẩy lên git)
-│   ├── output.xlsx    # File Excel kết quả
-│   └── debug/         # Các file debug PNG
-└── README.md          # Hướng dẫn sử dụng
+├── requirements.txt     # Danh sách thư viện
+├── README.md            # Hướng dẫn sử dụng
+├── context/             # Tài liệu kế hoạch / ghi chú (plan.md)
+├── tests/               # Test tự động (unittest)
+├── input/               # Thư mục chứa file PDF đầu vào (không đẩy lên git)
+└── Run_YYYYMMDD_HHMMSS/ # Kết quả mỗi lần chạy, nằm trong "run_root" (không đẩy lên git)
+    ├── output.xlsx      # File Excel kết quả
+    └── debug/           # Các file debug PNG
 ```
 
 ## Cách sử dụng
@@ -57,15 +60,14 @@ CONFIG = {
     # Đường dẫn thư mục chứa PDF (khi input_mode = "folder")
     "input_folder": r"D:\Working\Draft\input",
     
-    # Đường dẫn file Excel đầu ra
-    "output_excel": r"D:\Working\Draft\output.xlsx",
+    # Tên file Excel đầu ra (lưu trong thư mục Run_* của mỗi lần chạy)
+    "output_excel": "output.xlsx",
     
     # Thư mục gốc lưu các lần chạy
     "run_root": r"D:\Working\Draft",
     
-    # Chế độ debug
+    # Chế độ debug (ảnh debug lưu trong Run_*/debug/)
     "debug": True,
-    "debug_folder": r"D:\Working\Draft\debug",
     "export_debug_images": True,
     
     # Vùng quét trên trang PDF (tỷ lệ 0.00-1.00)
@@ -214,9 +216,18 @@ Nếu bảng steel schedule không được ưu tiên đúng, điều chỉnh c�
 2. Giảm `min_rows`, `min_cols`, `min_cells`
 3. Giảm `min_score`
 
+## Chạy test
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+Test "smoke" dùng file `input/TRUSS LOT 73.pdf`. File này không nằm trong git; nếu không có, test đó sẽ được bỏ qua.
+
 ## Lưu ý
 
-- Các thư mục `input/` và `Run_*/` không được đẩy lên git (đã cấu hình trong `.gitignore`)
+- Các thư mục `input/` và `Run_*/`, cùng mọi file `*.pdf`, không được đẩy lên git (đã cấu hình trong `.gitignore`)
+- Trang PDF bị xoay (rotated) có thể làm khung debug bị lệch vị trí; kết quả Excel không bị ảnh hưởng nhiều nhưng nên kiểm tra lại bằng ảnh debug
 - Mỗi lần chạy chương trình sẽ tạo một thư mục `Run_YYYYMMDD_HHMMSS` mới
 - File Excel kết quả được lưu trong thư mục run tương ứng
 - Nên bật chế độ debug khi điều chỉnh cấu hình để dễ dàng kiểm tra
@@ -229,7 +240,7 @@ Nếu bảng steel schedule không được ưu tiên đúng, điều chỉnh c�
 CONFIG = {
     "input_mode": "single",
     "input_pdf": r"D:\Working\Draft\input\drawing.pdf",
-    "output_excel": r"D:\Working\Draft\output.xlsx",
+    "output_excel": "output.xlsx",
     # ... các cài đặt khác
 }
 ```
@@ -240,7 +251,7 @@ CONFIG = {
 CONFIG = {
     "input_mode": "folder",
     "input_folder": r"D:\Working\Draft\input",
-    "output_excel": r"D:\Working\Draft\output.xlsx",
+    "output_excel": "output.xlsx",
     # ... các cài đặt khác
 }
 ```

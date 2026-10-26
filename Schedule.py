@@ -20,7 +20,7 @@ from typing import List, Optional, Tuple
 
 import pdfplumber
 import pandas as pd
-import fitz
+import pymupdf as fitz
 
 from PIL import Image
 from PIL import ImageDraw
@@ -104,25 +104,25 @@ CONFIG = {
     # ------------------------------------------------------------------
     "sheet_name": "Steel Schedule",
     "scoring": {
-        # Ưu tiên bảng sát góc trái
+        # Prefer tables close to the left edge
         "left_weight": 40,
-        # Ưu tiên bảng sát đáy
+        # Prefer tables close to the bottom
         "bottom_weight": 40,
-        # Bảng rộng
+        # Prefer wide tables
         "aspect_weight": 30,
-        # Nhiều ô
+        # Prefer tables with many cells
         "cell_weight": 20,
-        # Nhiều text
+        # Prefer tables with a lot of text
         "text_weight": 20,
-        # Phạt bảng quá cao
+        # Penalty for tables that are too tall
         "height_penalty": 50,
-        # Ngưỡng
+        # Minimum score to keep a table
         "min_score": 80,
-        # Ngưỡng phạt chiều cao (tỷ lệ chiều cao trang)
+        # Height limit before the penalty applies (ratio of page height)
         "height_threshold": 0.20,
-        # Ngưỡng phạt bảng dọc (tỷ lệ rộng/cao)
+        # Width/height ratio below which a table counts as vertical
         "vertical_threshold": 1.2,
-        # Điểm phạt bảng dọc
+        # Penalty for vertical tables
         "vertical_penalty": 100,
     },
 }
@@ -215,7 +215,7 @@ class PageResult:
 @dataclass
 class PdfResult:
     pdf_path: Path
-    rows: List[tuple] = field(default_factory=list)
+    rows: List[list] = field(default_factory=list)
     error: Optional[str] = None
 
 
