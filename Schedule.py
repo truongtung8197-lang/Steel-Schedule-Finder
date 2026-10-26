@@ -146,6 +146,9 @@ def normalize_cell(value):
 
     value = str(value)
 
+    # Drop control characters; Excel export fails on them.
+    value = "".join(ch for ch in value if ch.isprintable() or ch.isspace())
+
     value = value.replace("\n", " ")
 
     value = " ".join(value.split())
@@ -234,7 +237,8 @@ def get_pdf_files():
         if not folder.exists() or not folder.is_dir():
             return []
 
-        return sorted(folder.glob("*.pdf"))
+        # Match .pdf and .PDF on every operating system.
+        return sorted(p for p in folder.iterdir() if p.suffix.lower() == ".pdf")
 
     raise ValueError("Invalid input_mode")
 
@@ -500,6 +504,8 @@ def process_pdf(pdf_path, run_folder):
             default=None,
             prefix=f"Failed to open PDF for debug image: {pdf_path}",
         )
+        if err:
+            print(err)
 
     def _run():
         with pdfplumber.open(pdf_path) as pdf:
@@ -507,17 +513,22 @@ def process_pdf(pdf_path, run_folder):
                 page_result = extract_page_tables(page, page_index)
 
                 if page_result.error:
-                    log(f"Page {page_index + 1}: {page_result.error}")
+                    print(f"Page {page_index + 1}: {page_result.error}")
                 else:
                     log(f"Page {page_index + 1}: {len(page_result.tables)} table(s)")
 
-                draw_debug_image(
+                # A failed debug image must not stop the table extraction.
+                _, err = _try(
+                    draw_debug_image,
                     debug_doc,
                     pdf_path,
                     page_index,
                     page_result.tables,
                     run_folder,
+                    prefix=f"Page {page_index + 1}: debug image failed",
                 )
+                if err:
+                    print(err)
 
                 for table_index, table in enumerate(page_result.tables, start=1):
                     log(f"  Table {table_index}", f"Rows={len(table.data)}")
@@ -589,12 +600,6 @@ def export_excel(rows, run_folder):
 
 def main():
 
-    run_folder = get_run_folder()
-
-    run_folder.mkdir(parents=True, exist_ok=True)
-
-    log("Run folder:", run_folder)
-
     pdf_files = get_pdf_files()
 
     if not pdf_files:
@@ -602,12 +607,18 @@ def main():
 
         return
 
+    run_folder = get_run_folder()
+
+    run_folder.mkdir(parents=True, exist_ok=True)
+
+    log("Run folder:", run_folder)
+
     all_rows = []
 
     for pdf_file in pdf_files:
         result = process_pdf(pdf_file, run_folder)
         if result.error:
-            log(result.error)
+            print(result.error)
         all_rows.extend(result.rows)
 
     export_excel(all_rows, run_folder)

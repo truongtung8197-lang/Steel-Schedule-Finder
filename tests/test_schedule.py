@@ -5,11 +5,14 @@ Run from the repo root:
     python -m unittest discover -s tests -t .
 """
 
+import contextlib
 import copy
+import io
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import pandas as pd
 
@@ -41,6 +44,9 @@ class NormalizeCellTests(unittest.TestCase):
 
     def test_numbers_become_text(self):
         self.assertEqual(Schedule.normalize_cell(3235), "3235")
+
+    def test_control_characters_are_removed(self):
+        self.assertEqual(Schedule.normalize_cell("UC\x00250\x01*90"), "UC250*90")
 
 
 class CleanTableTests(unittest.TestCase):
@@ -106,6 +112,12 @@ class GetPdfFilesTests(ConfigTestCase):
             Schedule.get_pdf_files(), [self.tmp / "a.pdf", self.tmp / "b.pdf"]
         )
 
+    def test_folder_mode_ignores_pdf_extension_case(self):
+        (self.tmp / "A.PDF").write_text("x")
+        Schedule.CONFIG["input_mode"] = "folder"
+        Schedule.CONFIG["input_folder"] = str(self.tmp)
+        self.assertEqual(Schedule.get_pdf_files(), [self.tmp / "A.PDF"])
+
     def test_missing_folder_returns_empty(self):
         Schedule.CONFIG["input_mode"] = "folder"
         Schedule.CONFIG["input_folder"] = str(self.tmp / "nope")
@@ -134,6 +146,31 @@ class ExportExcelTests(ConfigTestCase):
         self.assertEqual(len(df), 2)
         self.assertEqual(df.loc[1, "Col_1"], "z")
 
+    def test_cleaned_text_with_control_characters_exports(self):
+        Schedule.CONFIG["output_excel"] = "out.xlsx"
+        cell = Schedule.normalize_cell("bad\x01cell")
+        Schedule.export_excel([["a.pdf", 1, 1, cell]], self.tmp)
+        self.assertTrue((self.tmp / "out.xlsx").exists())
+
+
+class MainTests(ConfigTestCase):
+    def test_no_pdf_creates_no_run_folder(self):
+        Schedule.CONFIG["input_mode"] = "folder"
+        Schedule.CONFIG["input_folder"] = str(self.tmp / "empty")
+        Schedule.CONFIG["run_root"] = str(self.tmp / "runs")
+        Schedule.main()
+        self.assertFalse((self.tmp / "runs").exists())
+
+    def test_errors_are_printed_even_when_debug_is_off(self):
+        Schedule.CONFIG["debug"] = False
+        Schedule.CONFIG["input_mode"] = "single"
+        Schedule.CONFIG["input_pdf"] = str(self.tmp / "missing.pdf")
+        Schedule.CONFIG["run_root"] = str(self.tmp / "runs")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            Schedule.main()
+        self.assertIn("Failed to process PDF", output.getvalue())
+
 
 @unittest.skipUnless(SAMPLE_PDF.exists(), "sample PDF not in input/ (kept out of git)")
 class SamplePdfSmokeTest(ConfigTestCase):
@@ -155,6 +192,17 @@ class SamplePdfSmokeTest(ConfigTestCase):
         self.assertIn("fc380", flat)
 
         self.assertEqual(len(list((self.tmp / "debug").glob("*.png"))), 9)
+
+    def test_debug_image_failure_does_not_stop_extraction(self):
+        Schedule.CONFIG["debug"] = False
+        output = io.StringIO()
+        with mock.patch.object(Schedule, "draw_debug_image", side_effect=RuntimeError("boom")):
+            with contextlib.redirect_stdout(output):
+                result = Schedule.process_pdf(SAMPLE_PDF, self.tmp)
+
+        self.assertIsNone(result.error)
+        self.assertEqual(len(result.rows), 115)
+        self.assertIn("debug image failed", output.getvalue())
 
 
 if __name__ == "__main__":
