@@ -1,17 +1,26 @@
-# Personal data directories
+# Keep these folders in git (through an empty .gitkeep file),
+# but never upload anything else inside them.
 input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+context/*
+!context/.gitkeep
+
+# Run results, in case they are created somewhere else
 Run_*/
+debug/
 
-# Python cache
-__pycache__/
-
-# Output files
+# Drawings and result files
+*.pdf
 *.xlsx
 *.xls
 *.csv
 
-# Debug directories
-debug/
+# Python cache and virtual environment
+__pycache__/
+.venv/
+venv/
 
 # IDE files
 .vscode/

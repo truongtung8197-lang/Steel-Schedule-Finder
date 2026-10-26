@@ -1,4 +1,5 @@
-fitz==0.0.1.dev2
-pandas==3.0.3
+PyMuPDF==1.28.2
+openpyxl==3.1.5
+pandas==3.1.0
 pdfplumber==0.11.10
-Pillow==12.3.0
+Pillow==13.0.0
