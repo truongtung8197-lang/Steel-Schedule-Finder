@@ -37,16 +37,17 @@ CONFIG = {
     "input_mode": "folder",  # "single" or "folder"
     "input_pdf": r"D:\Working\Draft\input\SUB1-[0].pdf",
     "input_folder": r"D:\Working\Draft\input",
-    "output_excel": r"D:\Working\Draft\output.xlsx",
+    # File name only: the file is saved inside each Run_* folder.
+    "output_excel": "output.xlsx",
     # ------------------------------------------------------------------
     # Run history
     # ------------------------------------------------------------------
     "run_root": r"D:\Working\Draft",
     # ------------------------------------------------------------------
     # Debug
+    # (debug images are saved in <run folder>/debug)
     # ------------------------------------------------------------------
     "debug": True,
-    "debug_folder": r"D:\Working\Draft\debug",
     "export_debug_images": True,
     # ------------------------------------------------------------------
     # Search region
@@ -212,7 +213,6 @@ class PageResult:
 class PdfResult:
     pdf_path: Path
     rows: List[tuple] = field(default_factory=list)
-    pages: List[PageResult] = field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -244,13 +244,9 @@ def get_pdf_files():
 # ==============================================================================
 
 
-def build_crop_box(page):
+def build_crop_box(width, height):
 
     region = CONFIG["search_region"]
-
-    width = page.width
-
-    height = page.height
 
     x0 = width * region["left"]
 
@@ -277,30 +273,17 @@ def get_run_folder():
 # ==============================================================================
 
 
-def draw_debug_image(pdf_path, page_index, crop_box, tables, run_folder=None):
+def draw_debug_image(doc, pdf_path, page_index, tables, run_folder):
 
-    if not CONFIG["export_debug_images"]:
+    if doc is None:
         return
 
-    if run_folder:
-        debug_folder = run_folder / "debug"
-    else:
-        debug_folder = Path(CONFIG["debug_folder"])
+    debug_folder = run_folder / "debug"
 
     debug_folder.mkdir(parents=True, exist_ok=True)
 
-    doc, err = _try(
-        fitz.open,
-        pdf_path,
-        default=None,
-        prefix=f"Failed to open PDF for debug image: {pdf_path}",
-    )
-    if err:
-        return
-
     if page_index < 0 or page_index >= len(doc):
         print(f"Invalid page index {page_index} for debug image: {pdf_path}")
-        doc.close()
         return
 
     page = doc[page_index]
@@ -318,13 +301,9 @@ def draw_debug_image(pdf_path, page_index, crop_box, tables, run_folder=None):
     scale_x = image.width / page.rect.width
     scale_y = image.height / page.rect.height
 
-    region = CONFIG["search_region"]
-
-    search_x0 = page.rect.width * region["left"]
-    search_x1 = page.rect.width * region["right"]
-
-    search_y0 = page.rect.height * region["top"]
-    search_y1 = page.rect.height * region["bottom"]
+    search_x0, search_y0, search_x1, search_y1 = build_crop_box(
+        page.rect.width, page.rect.height
+    )
 
     draw.rectangle(
         [
@@ -358,8 +337,6 @@ def draw_debug_image(pdf_path, page_index, crop_box, tables, run_folder=None):
     output = debug_folder / (f"{pdf_path.stem}_page_{page_index + 1}.png")
 
     image.save(output)
-
-    doc.close()
 
     log("Debug image:", output)
 
@@ -458,7 +435,7 @@ def compute_score(table_obj, table_data, page):
 
 def extract_page_tables(page, page_index):
 
-    crop_box = build_crop_box(page)
+    crop_box = build_crop_box(page.width, page.height)
 
     cropped_page, err = _try(
         page.crop, crop_box, default=None, prefix="Failed to crop page"
@@ -506,20 +483,28 @@ def extract_page_tables(page, page_index):
 # ==============================================================================
 
 
-def process_pdf(pdf_path, run_folder=None):
+def process_pdf(pdf_path, run_folder):
 
     rows = []
-    pages = []
 
     log()
     log("=" * 80)
     log("Processing:", pdf_path.name)
 
+    # Open the PDF for debug images once, not once per page.
+    debug_doc = None
+    if CONFIG["export_debug_images"]:
+        debug_doc, err = _try(
+            fitz.open,
+            pdf_path,
+            default=None,
+            prefix=f"Failed to open PDF for debug image: {pdf_path}",
+        )
+
     def _run():
         with pdfplumber.open(pdf_path) as pdf:
             for page_index, page in enumerate(pdf.pages):
                 page_result = extract_page_tables(page, page_index)
-                pages.append(page_result)
 
                 if page_result.error:
                     log(f"Page {page_index + 1}: {page_result.error}")
@@ -527,9 +512,9 @@ def process_pdf(pdf_path, run_folder=None):
                     log(f"Page {page_index + 1}: {len(page_result.tables)} table(s)")
 
                 draw_debug_image(
+                    debug_doc,
                     pdf_path,
                     page_index,
-                    page_result.crop_box,
                     page_result.tables,
                     run_folder,
                 )
@@ -539,11 +524,16 @@ def process_pdf(pdf_path, run_folder=None):
                     for row in table.data:
                         rows.append([pdf_path.name, page_index + 1, table_index, *row])
 
-    _, err = _try(_run, prefix=f"Failed to process PDF {pdf_path.name}")
+    try:
+        _, err = _try(_run, prefix=f"Failed to process PDF {pdf_path.name}")
+    finally:
+        if debug_doc is not None:
+            debug_doc.close()
+
     if err:
         return PdfResult(pdf_path=pdf_path, error=err)
 
-    return PdfResult(pdf_path=pdf_path, rows=rows, pages=pages)
+    return PdfResult(pdf_path=pdf_path, rows=rows)
 
 
 # ==============================================================================
@@ -551,7 +541,7 @@ def process_pdf(pdf_path, run_folder=None):
 # ==============================================================================
 
 
-def export_excel(rows, run_folder=None):
+def export_excel(rows, run_folder):
 
     if not rows:
         print("No table found.")
@@ -560,6 +550,7 @@ def export_excel(rows, run_folder=None):
 
     max_cols = max(len(r) for r in rows)
 
+    # Tables can have different widths, so pad every row to the widest one.
     normalized = []
 
     for row in rows:
@@ -578,10 +569,7 @@ def export_excel(rows, run_folder=None):
 
     df = pd.DataFrame(normalized, columns=headers)
 
-    if run_folder:
-        output = run_folder / Path(CONFIG["output_excel"]).name
-    else:
-        output = Path(CONFIG["output_excel"])
+    output = run_folder / Path(CONFIG["output_excel"]).name
 
     output.parent.mkdir(parents=True, exist_ok=True)
 

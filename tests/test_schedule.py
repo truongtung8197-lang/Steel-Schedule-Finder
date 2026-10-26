@@ -70,8 +70,7 @@ class CleanTableTests(unittest.TestCase):
 
 class BuildCropBoxTests(unittest.TestCase):
     def test_default_region_is_bottom_left(self):
-        page = SimpleNamespace(width=1000, height=500)
-        self.assertEqual(Schedule.build_crop_box(page), (0, 300, 400, 500))
+        self.assertEqual(Schedule.build_crop_box(1000, 500), (0, 300, 400, 500))
 
 
 class ComputeScoreTests(unittest.TestCase):
