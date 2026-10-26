@@ -125,8 +125,10 @@ CONFIG = {
         "text_weight": 20,
         # Penalty for tables that are too tall
         "height_penalty": 50,
-        # Minimum score to keep a table
-        "min_score": 80,
+        # Minimum score to keep a table.
+        # On the sample drawing: real material lists score 400-600,
+        # junk dimension tables score about 250-270.
+        "min_score": 300,
         # Height limit before the penalty applies (ratio of page height)
         "height_threshold": 0.20,
         # Width/height ratio below which a table counts as vertical
@@ -488,7 +490,9 @@ def extract_page_tables(page, page_index):
         if not table_data:
             continue
 
-        score = compute_score(table_obj, table_data, cropped_page)
+        # Table coordinates are relative to the full page, so score against
+        # the full page size (not the smaller cropped area).
+        score = compute_score(table_obj, table_data, page)
         if score < min_score:
             continue
 

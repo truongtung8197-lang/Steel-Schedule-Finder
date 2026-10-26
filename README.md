@@ -35,10 +35,10 @@ Steel-Schedule-Finder/            <- base_folder
 ├── Schedule.py                   # The program
 ├── requirements.txt              # Python libraries
 ├── README.md                     # This file
-├── context/                      # Plans and notes (plan.md)
+├── context/                      # Plans and notes (contents not pushed to git)
 ├── tests/                        # Automatic tests (unittest)
-├── input/                        # Put your PDFs here (not pushed to git)
-└── output/                       # Results (not pushed to git)
+├── input/                        # Put your PDFs here (contents not pushed to git)
+└── output/                       # Results (contents not pushed to git)
     └── Run_YYYYMMDD_HHMMSS/      # One folder per run, never overwritten
         ├── output.xlsx           # Excel result
         └── debug/                # Debug PNG images
@@ -117,7 +117,7 @@ This means: the left 40% of the page width, and the lower 40% of the page height
     "cell_weight": 20,
     "text_weight": 20,
     "height_penalty": 50,
-    "min_score": 80,
+    "min_score": 300,
     "height_threshold": 0.20,
     "vertical_threshold": 1.2,
     "vertical_penalty": 100,
@@ -150,8 +150,28 @@ Adjust `table_settings`:
 ### Too many small or junk tables
 
 - Raise `min_rows`, `min_cols` or `min_cells` (for example 4-5 rows, 3-4 columns, 10-15 cells)
-- Or raise `scoring.min_score` (for example 100-120)
+- Or raise `scoring.min_score` (the default is 300; see "How tables are scored")
 - Or raise `table_settings.edge_min_length`
+
+### How tables are scored
+
+Every table found in the search region gets a score, and only tables with a score of at least `scoring.min_score` are exported. Points are added for:
+
+- being close to the left edge and to the bottom of the **full page**
+- being wide (width / height, capped at 5)
+- having many cells and a lot of text (each capped)
+
+Points are taken away for tables taller than `height_threshold` of the page height, and for tall narrow tables (`vertical_threshold`).
+
+The default `min_score` of 300 was tuned on the sample drawing (`TRUSS LOT 73.pdf`):
+
+| What | Score |
+|---|---|
+| Real material lists | 400 to 600 |
+| Junk tables made of dimension numbers | about 250 to 270 |
+| Other small fragments | below 70 |
+
+A small, fully filled list of the same width scores about 310 (3 rows) to 360 (6 rows), so it still passes. If a **real table is missing**, lower `min_score` (for example 250). If **junk tables appear**, raise it (for example 350). Check the debug images after each change. These numbers come from one drawing, so re-check them when you use drawings from a different drafter.
 
 ### The steel schedule is not ranked correctly
 
@@ -192,7 +212,7 @@ The smoke tests use `input/TRUSS LOT 73.pdf`. That file is not in git; if it is 
 
 ## Notes and known limits
 
-- `input/`, `output/`, `Run_*/` and all `*.pdf` files are not pushed to git (see `.gitignore`).
+- The folders `input/`, `output/` and `context/` exist in git (each holds an empty `.gitkeep` file), but nothing else inside them is pushed. `Run_*/` folders and all `*.pdf` / `*.xlsx` files are never pushed either (see `.gitignore`).
 - Every run creates a new `Run_YYYYMMDD_HHMMSS` folder, so old results are kept.
 - If a material list has two blocks side by side, each Excel row holds two items (columns `Col_1`-`Col_7` and `Col_8`-`Col_14`). Splitting them is not done yet.
 - Rotated PDF pages can make the debug boxes appear in the wrong place. Check the Excel data against the drawing.

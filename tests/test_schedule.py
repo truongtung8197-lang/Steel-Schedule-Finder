@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pandas as pd
+import pdfplumber
 
 import Schedule
 
@@ -210,13 +211,12 @@ class SamplePdfSmokeTest(ConfigTestCase):
         result = Schedule.process_pdf(SAMPLE_PDF, self.tmp)
 
         self.assertIsNone(result.error)
-        self.assertEqual(len(result.rows), 115)
+        # One material list per page; the small dimension-number tables on
+        # pages 6 and 9 must be filtered out by min_score.
+        self.assertEqual(len(result.rows), 109)
 
         tables = {(row[1], row[2]) for row in result.rows}
-        self.assertEqual(
-            tables,
-            {(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (6, 2), (7, 1), (8, 1), (9, 1), (9, 2)},
-        )
+        self.assertEqual(tables, {(page, 1) for page in range(1, 10)})
 
         flat = [cell for row in result.rows for cell in row]
         self.assertIn("MATERIAL LIST", flat)
@@ -232,8 +232,20 @@ class SamplePdfSmokeTest(ConfigTestCase):
                 result = Schedule.process_pdf(SAMPLE_PDF, self.tmp)
 
         self.assertIsNone(result.error)
-        self.assertEqual(len(result.rows), 115)
+        self.assertEqual(len(result.rows), 109)
         self.assertIn("debug image failed", output.getvalue())
+
+    def test_scores_use_the_full_page_size(self):
+        with pdfplumber.open(SAMPLE_PDF) as pdf:
+            page = pdf.pages[0]
+            with mock.patch.object(
+                Schedule, "compute_score", wraps=Schedule.compute_score
+            ) as spy:
+                Schedule.extract_page_tables(page, 0)
+
+        self.assertTrue(spy.called)
+        for call in spy.call_args_list:
+            self.assertIs(call.args[2], page)
 
 
 if __name__ == "__main__":
