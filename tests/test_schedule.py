@@ -76,8 +76,14 @@ class CleanTableTests(unittest.TestCase):
         self.assertEqual(result[2], ["e", "f", ""])
 
 
-class BuildCropBoxTests(unittest.TestCase):
-    def test_default_region_is_bottom_left(self):
+class BuildCropBoxTests(ConfigTestCase):
+    def test_region_ratios_are_applied_to_page_size(self):
+        Schedule.CONFIG["search_region"] = {
+            "left": 0.0,
+            "right": 0.4,
+            "top": 0.6,
+            "bottom": 1.0,
+        }
         self.assertEqual(Schedule.build_crop_box(1000, 500), (0, 300, 400, 500))
 
 

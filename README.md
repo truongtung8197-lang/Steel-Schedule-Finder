@@ -90,12 +90,12 @@ The region is given as ratios (0.00 to 1.00) of the page width and height:
 "search_region": {
     "left": 0.00,    # start at the left edge
     "right": 0.40,   # up to 40% of the page width
-    "top": 0.60,     # start at 60% of the page height
+    "top": 0.70,     # start at 70% of the page height
     "bottom": 1.00,  # down to the bottom of the page
 }
 ```
 
-This means: the left 40% of the page width, and the lower 40% of the page height.
+This means: the left 40% of the page width, and the lower 30% of the page height.
 
 ### Other settings
 
